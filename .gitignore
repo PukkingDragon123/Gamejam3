@@ -1,0 +1,12 @@
+# dependencies / test tooling (game itself needs none)
+node_modules/
+package.json
+package-lock.json
+
+# scratch & test artifacts
+scratch_*
+*.log
+
+# os junk
+.DS_Store
+Thumbs.db

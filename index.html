@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>LIL GUYS COLOSSEUM</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="frame">
+
+    <!-- ======= TOP HUD ======= -->
+    <header id="hud">
+      <div class="hud-left">
+        <div class="stat" id="stat-wave"><span class="lbl">WAVE</span><span class="val" id="wave-val">1</span></div>
+        <div class="stat" id="stat-roster"><span class="lbl">LIL GUYS</span><span class="val" id="roster-val">0</span></div>
+        <div class="stat" id="stat-score"><span class="lbl">SCORE</span><span class="val" id="score-val">0</span></div>
+      </div>
+      <div class="hud-center">
+        <div id="banner">THE COLOSSEUM</div>
+        <div id="wave-sub">Drag your Lil Guys into the arena</div>
+      </div>
+      <div class="hud-right">
+        <div id="hype-wrap" title="Crowd Hype — powers your spells">
+          <div class="lbl">CROWD HYPE</div>
+          <div id="hype-bar"><div id="hype-fill"></div><span id="hype-txt">0</span></div>
+        </div>
+        <button id="mute-btn" class="icon-btn" title="Toggle sound">🔊</button>
+      </div>
+    </header>
+
+    <!-- ======= GAME CANVAS ======= -->
+    <div id="stage">
+      <canvas id="game"></canvas>
+
+      <!-- big action button overlay -->
+      <button id="fight-btn" class="hidden">FIGHT! ⚔️</button>
+
+      <!-- toast messages -->
+      <div id="toast" class="hidden"></div>
+
+      <!-- ======= TITLE SCREEN ======= -->
+      <div id="title-screen" class="overlay">
+        <div class="title-card">
+          <h1>LIL GUYS<span>COLOSSEUM</span></h1>
+          <p class="tag">Tiny gladiators. Giant bugs. Maximum chaos.</p>
+          <ul class="how">
+            <li>🖱️ <b>Drag</b> your Lil Guys from the cage into the sandy arena.</li>
+            <li>⚔️ Hit <b>FIGHT</b> — battles are automatic, your guys bounce &amp; brawl.</li>
+            <li>✨ Spend <b>Crowd Hype</b> to cast ridiculous spells &amp; help them out.</li>
+            <li>🏆 Clear a wave, pick <b>1 of 3 rewards</b>, survive the bug bosses!</li>
+          </ul>
+          <button id="start-btn" class="big-btn">ENTER THE ARENA</button>
+        </div>
+      </div>
+
+      <!-- ======= REWARD SCREEN ======= -->
+      <div id="reward-screen" class="overlay hidden">
+        <div class="reward-inner">
+          <h2 id="reward-title">WAVE CLEARED!</h2>
+          <p id="reward-sub">The crowd roars! Choose your spoils:</p>
+          <div id="reward-cards"></div>
+        </div>
+      </div>
+
+      <!-- ======= GAME OVER ======= -->
+      <div id="over-screen" class="overlay hidden">
+        <div class="over-card">
+          <h2 id="over-title">DEFEATED</h2>
+          <p id="over-sub">The crowd is not amused.</p>
+          <div id="over-stats"></div>
+          <button id="restart-btn" class="big-btn">TRY AGAIN</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======= SPELL BAR ======= -->
+    <footer id="spellbar">
+      <div id="companions"></div>
+      <div id="spells"></div>
+      <div id="hint">Select a spell, then click the arena to cast.</div>
+    </footer>
+  </div>
+
+  <!-- scripts (classic, loaded in dependency order so it runs from file://) -->
+  <script src="js/util.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
