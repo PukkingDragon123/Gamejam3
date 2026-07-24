@@ -51,8 +51,8 @@ class Unit {
   }
 
   get alive() { return this.hp > 0 && !this.ko && !this.removed; }
-  get drawH() { const s = this.def.body === 'TANK' ? 13 : (this.kind === 'bug' ? 10 : 13); return s * this.pixel(); }
-  pixel() { return (this.kind === 'guy' ? 3 : 3) * this.scale; }
+  get drawH() { const spr = ART[this.def.body || 'GUY']; return (spr ? spr.h : 14) * this.pixel(); }
+  pixel() { return 3 * this.scale; }
 
   shout(text) {
     if (this.shoutTimer > 0) return;
@@ -334,7 +334,6 @@ class Unit {
         if (u.side !== 'ally' || !u.alive || u === this) continue;
         if (dist(this.x, this.y, u.x, u.y) <= this.range) { u.buffHaste = Math.max(u.buffHaste, 2.2); n++; }
       }
-      game.addHype(this.def.hypeGen + n * 0.6);
       game.pulse(this.x, this.y, this.range, '#e0c04a');
       game.sfx('buff');
       this.shout(pick(this.def.shouts));
@@ -529,7 +528,7 @@ class Unit {
 
   drawBugLegs(ctx, drawY, px, game) {
     const n = this.def.legs || 6;
-    const bodyW = (this.def.body === 'SLIMBUG' ? 7 : (this.def.body === 'ROUNDBUG' ? 11 : 9)) * px * 0.5;
+    const bodyW = (this.def.body === 'SLIMBUG' ? 9 : 11) * px * 0.5;
     const cy = drawY - this.drawH * 0.4;
     const wig = Math.sin(game.time * 16 + this.id) * 2;
     ctx.strokeStyle = shade(this.def.pal.B, -0.4); ctx.lineWidth = Math.max(1, px * 0.5);

@@ -3,6 +3,27 @@
    waves, spells, companions, rendering & UI. Global: Game
    =========================================================== */
 
+// Greek/Roman mythology flavour for the reward cards — a patron
+// deity and a themed icon for every recruit, power and relic.
+const MYTH = {
+  // recruits
+  gladiator: { i: '⚔️', god: 'MARS' }, brawler: { i: '👊', god: 'HERCULES' },
+  spearman: { i: '🔱', god: 'NEPTVNE' }, archer: { i: '🏹', god: 'DIANA' },
+  tank: { i: '🛡️', god: 'MINERVA' }, medic: { i: '⚕️', god: 'AESCVLAPIVS' },
+  drummer: { i: '🥁', god: 'BACCHVS' },
+  // powers
+  water: { i: '🌊', god: 'NEPTVNE' }, boulder: { i: '🪨', god: 'ATLAS' },
+  snacks: { i: '🍇', god: 'BACCHVS' }, cheese: { i: '🧀', god: 'MERCVRY' },
+  bolt: { i: '⚡', god: 'IVPITER' }, banana: { i: '🍌', god: 'DISCORDIA' },
+  oil: { i: '🫒', god: 'MINERVA' }, rally: { i: '📣', god: 'VICTORIA' },
+  // relics / companions
+  goose: { i: '🦢', god: 'IVNO' }, dog: { i: '🐕', god: 'DIANA' },
+  ballista: { i: '🏹', god: 'VVLCAN' }, catapult: { i: '☄️', god: 'VVLCAN' },
+  brazier: { i: '🔥', god: 'VESTA' }, caltrops: { i: '✳️', god: 'MARS' },
+  trumpet: { i: '🎺', god: 'FAMA' }, laurel: { i: '🌿', god: 'VICTORIA' },
+  feast: { i: '🍖', god: 'CERES' },
+};
+
 class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -32,16 +53,18 @@ class Game {
     this.spellCd = {};
     this.armed = null;
 
-    this.passives = { hypeRegen: 1, maxHype: 100, startBonus: 0 };
+    this.passives = { cdReduce: 0, hpBoost: 0 };
     this.ownedTools = [];
 
-    this.hype = 35;
     this.wave = 1;
     this.score = 0;
     this.kills = 0;
     this.shakeAmt = 0;
     this.pointer = { x: 450, y: 300, down: false };
     this.dragging = null;
+    this.flick = null;                  // active flick drag
+    this.flickCd = 0;                   // base-skill cooldown
+    this.hand = { show: false, mode: 'point', anim: 0, x: 450, y: 300 };
     this.bossBanner = null;
     this.spawnQueue = [];
     this.best = +(localStorage.getItem('lgc_best') || 0);
@@ -59,7 +82,6 @@ class Game {
     const $ = (id) => document.getElementById(id);
     this.el = {
       waveVal: $('wave-val'), rosterVal: $('roster-val'), scoreVal: $('score-val'),
-      hypeFill: $('hype-fill'), hypeTxt: $('hype-txt'),
       banner: $('banner'), waveSub: $('wave-sub'),
       fightBtn: $('fight-btn'), toast: $('toast'),
       titleScreen: $('title-screen'), startBtn: $('start-btn'),
@@ -111,9 +133,9 @@ class Game {
     this.floaters = []; this.hazards = []; this.turrets = []; this.telegraphs = [];
     this.pulses = []; this.lure = null; this.spawnQueue = [];
     this.spells = ['water']; this.spellCd = {}; this.armed = null;
-    this.passives = { hypeRegen: 1, maxHype: 100, startBonus: 0 };
-    this.ownedTools = [];
-    this.hype = 35; this.wave = 1; this.score = 0; this.kills = 0;
+    this.passives = { cdReduce: 0, hpBoost: 0 };
+    this.ownedTools = []; this.flick = null; this.flickCd = 0;
+    this.wave = 1; this.score = 0; this.kills = 0;
     this.bossBanner = null;
 
     // starting roster
@@ -131,6 +153,7 @@ class Game {
     const p = this.world.pen;
     const u = new Unit(def, 'ally', 'guy', rand(p.x + 30, p.x + p.w - 30), rand(p.y + 24, p.y + p.h - 16));
     u.benched = true; u.state = 'penned';
+    u.maxHp = Math.round(def.hp * (1 + this.passives.hpBoost)); u.hp = u.maxHp;
     this.roster.push(u); this.units.push(u);
     return u;
   }
@@ -154,7 +177,7 @@ class Game {
         const a = this.world.arena; u.x = a.cx + rand(-60, 60); u.y = a.cy + rand(-40, 40);
       }
     }
-    this.hype = clamp(this.hype + 12 + this.passives.startBonus, 0, this.passives.maxHype);
+    this.flick = null; this.flickCd = 0;
 
     const boss = (this.wave % 5 === 0);
     this.setBanner(boss ? `⚠ WAVE ${this.wave} — BOSS ⚠` : `WAVE ${this.wave}`,
@@ -260,12 +283,11 @@ class Game {
       }
     }
 
-    // hype regen
-    if (this.phase === 'battle') this.addHype(3 * this.passives.hypeRegen * dt, true);
-    else if (this.phase === 'prep') this.addHype(1.5 * dt, true);
-
-    // spell cooldowns
+    // cooldowns (spells + the base flick skill)
     for (const k in this.spellCd) if (this.spellCd[k] > 0) this.spellCd[k] = Math.max(0, this.spellCd[k] - dt);
+    if (this.flickCd > 0) this.flickCd = Math.max(0, this.flickCd - dt);
+    if (this.hand.anim > 0) this.hand.anim = Math.max(0, this.hand.anim - dt * 4);
+    this._updateHand();
 
     // entities
     for (const u of this.units) { u.slipCd = (u.slipCd || 0) - dt; u.update(dt, this); }
@@ -312,6 +334,7 @@ class Game {
   gameOver() {
     if (this.phase === 'over') return;
     this.phase = 'over';
+    this.hand.show = false; this.canvas.style.cursor = 'default';
     SFX.play('lose');
     this.best = Math.max(this.best, this.score);
     localStorage.setItem('lgc_best', this.best);
@@ -329,7 +352,6 @@ class Game {
   onKill(u) {
     this.kills++;
     this.score += (u.def.xp || 1) * 4 + this.wave;
-    this.addHype(u.def.hype || 3);
     this.poof(u.x, u.y, u.def.pal.B, u.boss ? 30 : 8);
     this.floatText(u.x, u.y - u.drawH, '✕', '#fff');
     if (chance(0.4) || u.boss) this.cheerBurst(u.boss ? 40 : 8);
@@ -383,11 +405,18 @@ class Game {
   /* ============================ SPELLS ============================ */
   buildSpellBar() {
     const box = this.el.spells; box.innerHTML = '';
+    // the base skill: God's Flick
+    const f = document.createElement('div');
+    f.className = 'spell flick-slot'; f.dataset.id = '__flick';
+    f.innerHTML = `<div class="s-icon">🖐️</div><div class="s-name">FLICK</div><div class="s-cd"></div>`;
+    f.title = "God's Flick — drag from a bug in the arena to fling it away. Free base skill.";
+    f.onclick = () => this.toast('Drag from a bug in the arena to FLICK it away! 🖐️');
+    box.appendChild(f);
     for (const id of this.spells) {
       const s = DATA.SPELLS[id];
       const b = document.createElement('div');
       b.className = 'spell'; b.dataset.id = id;
-      b.innerHTML = `<div class="s-icon">${s.icon}</div><div class="s-cost">${s.cost}</div><div class="s-cd"></div>`;
+      b.innerHTML = `<div class="s-icon">${s.icon}</div><div class="s-cd"></div>`;
       b.title = `${s.name} — ${s.desc}`;
       b.onclick = () => this.onSpellClick(id);
       box.appendChild(b);
@@ -405,10 +434,9 @@ class Game {
   }
 
   onSpellClick(id) {
-    if (this.phase !== 'battle') { this.toast('Spells can only be cast during battle!'); SFX.play('deny'); return; }
+    if (this.phase !== 'battle') { this.toast('God-powers can only be cast during battle!'); SFX.play('deny'); return; }
     const s = DATA.SPELLS[id];
     if ((this.spellCd[id] || 0) > 0) { SFX.play('deny'); return; }
-    if (this.hype < s.cost) { this.toast('Not enough Crowd Hype!'); SFX.play('deny'); return; }
     if (s.target === 'self') { this.castSpell(id, this.world.arena.cx, this.world.arena.cy); return; }
     this.armed = (this.armed === id) ? null : id;
     SFX.play('click');
@@ -417,10 +445,10 @@ class Game {
 
   castSpell(id, x, y) {
     const s = DATA.SPELLS[id];
-    if (this.hype < s.cost || (this.spellCd[id] || 0) > 0) { SFX.play('deny'); return; }
-    this.hype -= s.cost;
-    this.spellCd[id] = s.cd;
+    if ((this.spellCd[id] || 0) > 0) { SFX.play('deny'); return; }
+    this.spellCd[id] = s.cd * (1 - this.passives.cdReduce);
     this.armed = null;
+    this.hand.mode = 'cast'; this.hand.anim = 1;
     this._refreshSpellButtons();
 
     const enemies = () => this.units.filter(u => u.side === 'enemy' && u.alive);
@@ -441,9 +469,9 @@ class Game {
       } });
     }
     else if (id === 'snacks') {
-      SFX.play('snack'); this.addHype(14);
+      SFX.play('snack');
       for (let i = 0; i < 14; i++) this.particles.push(this._p(x, y - 30, 30, rand(40, 130), rand(-2, 0), pick(['#e0a54a', '#c96a3a', '#f0d060']), rand(2, 4), 300, '🍗'));
-      this.floatText(x, y - 40, 'SNACKS! +hype', '#ffd23f', true);
+      this.floatText(x, y - 40, 'SNACKS!', '#ffd23f', true);
       for (const u of this.units) {
         if (u.side === 'ally' && !u.benched && u.alive && dist(x, y, u.x, u.y) < 90) { u.hp = Math.min(u.maxHp, u.hp + 22); this.floatText(u.x, u.y - u.drawH, '+22', '#7bd66a'); }
         if (u.side === 'enemy' && u.alive && !u.boss && dist(x, y, u.x, u.y) < 80) { u.stun = Math.max(u.stun, 2.2); if (chance(0.5)) u.shout('yum!'); }
@@ -476,20 +504,29 @@ class Game {
       for (const u of this.units) if (u.side === 'ally' && !u.benched && u.alive) { u.buffHaste = 6; this.floatText(u.x, u.y - u.drawH, 'SLICK!', '#ffe08a'); }
     }
     else if (id === 'rally') {
-      SFX.play('cheer'); this.cheerBurst(30); this.confetti(); this.addHype(10);
-      for (const u of this.units) if (u.side === 'ally' && !u.benched && u.alive) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.35); this.floatText(u.x, u.y - u.drawH, 'ROAR!', '#7bd66a'); }
+      SFX.play('cheer'); this.cheerBurst(30); this.confetti();
+      for (const u of this.units) if (u.side === 'ally' && !u.benched && u.alive) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.4); this.floatText(u.x, u.y - u.drawH, 'ROAR!', '#7bd66a'); }
     }
   }
 
   _refreshSpellButtons() {
     for (const b of this.el.spells.children) {
-      const id = b.dataset.id; const s = DATA.SPELLS[id];
+      const id = b.dataset.id;
+      const cdEl = b.querySelector('.s-cd');
+      if (id === '__flick') {
+        const cd = this.flickCd, max = 1.0;
+        if (cd > 0) { cdEl.style.height = (cd / max * 100) + '%'; cdEl.textContent = ''; }
+        else { cdEl.style.height = '0%'; }
+        b.classList.toggle('disabled', this.phase !== 'battle');
+        continue;
+      }
+      const s = DATA.SPELLS[id]; if (!s) continue;
       b.classList.toggle('armed', this.armed === id);
       const cd = this.spellCd[id] || 0;
-      const cdEl = b.querySelector('.s-cd');
-      if (cd > 0) { cdEl.style.height = (cd / s.cd * 100) + '%'; cdEl.textContent = Math.ceil(cd); }
+      const full = s.cd * (1 - this.passives.cdReduce);
+      if (cd > 0) { cdEl.style.height = (cd / full * 100) + '%'; cdEl.textContent = Math.ceil(cd); }
       else { cdEl.style.height = '0%'; cdEl.textContent = ''; }
-      b.classList.toggle('disabled', this.phase === 'battle' && (this.hype < s.cost || cd > 0));
+      b.classList.toggle('disabled', this.phase === 'battle' && cd > 0);
     }
   }
 
@@ -571,10 +608,18 @@ class Game {
       const u = this._guyAt(p.x, p.y);
       if (u) { this.dragging = u; u.state = 'dragging'; u.vx = u.vy = 0; SFX.play('place'); return; }
     }
-    if (this.phase === 'battle' && this.armed) {
-      const s = DATA.SPELLS[this.armed];
-      if (this._validCastPoint(p.x, p.y)) this.castSpell(this.armed, p.x, p.y);
-      else { this.toast('Aim inside the arena!'); SFX.play('deny'); }
+    if (this.phase === 'battle') {
+      if (this.armed) {
+        if (this._validCastPoint(p.x, p.y)) this.castSpell(this.armed, p.x, p.y);
+        else { this.toast('Aim inside the arena!'); SFX.play('deny'); }
+        return;
+      }
+      // no spell armed → begin a God's Flick if there's a bug near the press
+      if (this.flickCd <= 0) {
+        const bug = this._enemyAt(p.x, p.y, 44);
+        this.flick = { sx: p.x, sy: p.y, x: p.x, y: p.y, target: bug };
+        this.hand.mode = 'flick'; this.hand.anim = 1;
+      }
     }
   }
 
@@ -584,9 +629,11 @@ class Game {
       this.dragging.y = clamp(p.y, 8, this.world.pen.y + this.world.pen.h - 8);
       this.dragging.z = 34;
     }
+    if (this.flick) { this.flick.x = p.x; this.flick.y = p.y; }
   }
 
   onPointerUp(p) {
+    if (this.flick) { this._resolveFlick(p); }
     if (!this.dragging) return;
     const u = this.dragging; this.dragging = null; u.z = 0; u.vz = 40;
     const a = this.world.arena;
@@ -601,6 +648,56 @@ class Game {
       SFX.play('place');
     }
     this.updateHUD();
+  }
+
+  _resolveFlick(p) {
+    const f = this.flick; this.flick = null;
+    if (this.flickCd > 0) return;
+    let dx = p.x - f.sx, dy = p.y - f.sy;
+    let len = Math.hypot(dx, dy), dirx, diry;
+    if (len < 10) {                       // a tap: flick outward from arena centre
+      const a = angleTo(this.world.arena.cx, this.world.arena.cy, f.sx, f.sy);
+      dirx = Math.cos(a); diry = Math.sin(a); len = 70;
+    } else { dirx = dx / len; diry = dy / len; }
+    const power = clamp(len, 40, 240) * 2.4;
+    let hit = 0;
+    for (const u of this.units) {
+      if (u.side !== 'enemy' || !u.alive) continue;
+      if (dist(f.sx, f.sy, u.x, u.y) > 48) continue;
+      u.kx += dirx * power; u.ky += diry * power;
+      if (!u.fly) u.vz = Math.max(u.vz, 140);
+      if (!u.boss) u.stun = Math.max(u.stun, 0.45);
+      u.hurt(7, f.sx - dirx * 20, f.sy - diry * 20, 0, this, false);
+      hit++;
+    }
+    this.flickCd = 1.0;
+    this.hand.mode = 'flick'; this.hand.anim = 1;
+    this.floatText(f.sx, f.sy - 24, hit ? 'FLICK!' : 'whiff…', hit ? '#ffe08a' : '#b0a488', true);
+    this.spawnHit(f.sx, f.sy, '#ffe08a', hit ? 9 : 3);
+    SFX.play(hit ? 'crit' : 'deny');
+    if (hit) this.shake(3);
+  }
+
+  _enemyAt(x, y, r) {
+    let best = null, bd = r;
+    for (const u of this.units) {
+      if (u.side !== 'enemy' || !u.alive) continue;
+      const d = dist(x, y, u.x, u.y - u.z);
+      if (d < bd) { bd = d; best = u; }
+    }
+    return best;
+  }
+
+  _updateHand() {
+    const inArena = this._validCastPoint(this.pointer.x, this.pointer.y);
+    this.hand.x = this.pointer.x; this.hand.y = this.pointer.y;
+    if (this.dragging) { this.hand.show = true; this.hand.mode = 'pinch'; }
+    else if (this.flick) { this.hand.show = true; this.hand.mode = 'flick'; }
+    else if (this.armed && this.phase === 'battle') { this.hand.show = true; this.hand.mode = 'cast'; }
+    else if (this.phase === 'battle' && inArena) { this.hand.show = true; if (this.hand.anim <= 0) this.hand.mode = 'point'; }
+    else { this.hand.show = false; }
+    // hide OS cursor whenever the god hand is on
+    this.canvas.style.cursor = this.hand.show ? 'none' : 'default';
   }
 
   _guyAt(x, y) {
@@ -630,15 +727,24 @@ class Game {
     this.el.rewardTitle.textContent = boss ? 'BOSS SLAIN!' : `WAVE ${this.wave} CLEARED!`;
     this.el.rewardSub.textContent = 'The crowd roars! Choose your spoils:';
     const cards = this.rollRewards();
+    const tagName = { recruit: 'CHAMPION', spell: 'GOD POWER', tool: 'RELIC' };
     this.el.rewardCards.innerHTML = '';
-    for (const c of cards) {
+    cards.forEach((c, i) => {
+      const m = MYTH[c.id] || { i: c.icon, god: 'THE GODS' };
       const el = document.createElement('div');
       el.className = 'rcard';
-      el.innerHTML = `<div class="rc-icon">${c.icon}</div><div class="rc-tag ${c.type}">${c.type}</div>` +
-        `<div class="rc-name">${c.name}</div><div class="rc-desc">${c.desc}</div>`;
+      el.style.animationDelay = (i * 0.08) + 's';
+      el.innerHTML =
+        `<div class="rc-frame">` +
+          `<div class="rc-tag ${c.type}">${tagName[c.type]}</div>` +
+          `<div class="rc-icon">${m.i}</div>` +
+          `<div class="rc-name">${c.name}</div>` +
+          `<div class="rc-god">✦ blessing of ${m.god} ✦</div>` +
+          `<div class="rc-desc">${c.desc}</div>` +
+        `</div>`;
       el.onclick = () => { SFX.play('reward'); this.applyReward(c); };
       this.el.rewardCards.appendChild(el);
-    }
+    });
     SFX.play('reward');
   }
 
@@ -663,7 +769,7 @@ class Game {
       cat.tool.push({ type: 'tool', id, icon: d.icon, name: d.name, desc: d.desc });
     }
     // fallback tool so a category never runs dry
-    const feast = { type: 'tool', id: 'feast', icon: '🍖', name: 'Grand Feast', desc: 'Fully heal your squad & +18 max Crowd Hype. Always tasty.' };
+    const feast = { type: 'tool', id: 'feast', icon: '🍖', name: 'Grand Feast', desc: 'Fully heal your whole squad and toughen them up (+10% max HP).' };
 
     // pick 3, prefer one from each category
     const order = shuffle(['recruit', 'spell', 'tool']);
@@ -703,9 +809,9 @@ class Game {
 
   applyTool(c) {
     if (c.id === 'feast') {
-      this.passives.maxHype += 18;
+      this._boostGuyHp(0.10);
       for (const u of this.units) if (u.side === 'ally') u.revive();
-      this.toast('A grand feast! Squad healed. 🍖', 2.2);
+      this.toast('A grand feast! Squad healed & toughened. 🍖', 2.2);
       return;
     }
     const def = DATA.COMPANIONS[c.id];
@@ -721,18 +827,26 @@ class Game {
     } else if (def.kind === 'hazard') {
       this.addHazardTool(c.id); this.toast(`${def.name} placed! ${def.icon}`, 2.2);
     } else if (def.kind === 'passive') {
-      if (def.passive === 'hypeRegen') this.passives.hypeRegen += 0.5;
-      if (def.passive === 'maxHype') { this.passives.maxHype += 30; this.passives.startBonus += 15; }
+      if (def.passive === 'cdReduce') this.passives.cdReduce = Math.min(0.6, this.passives.cdReduce + 0.2);
+      if (def.passive === 'hpBoost') this._boostGuyHp(0.25);
       this.toast(`${def.name} — permanent boon! ${def.icon}`, 2.2);
     }
     this.buildSpellBar();
+  }
+
+  _boostGuyHp(frac) {
+    this.passives.hpBoost += frac;
+    for (const u of this.units) {
+      if (u.side !== 'ally' || u.kind !== 'guy') continue;
+      u.maxHp = Math.round(u.def.hp * (1 + this.passives.hpBoost));
+      u.hp = u.maxHp;
+    }
   }
 
   /* ============================ FX HELPERS ============================ */
   addProjectile(p) { this.projectiles.push(p); }
   sfx(n) { SFX.play(n); }
   shake(a) { this.shakeAmt = Math.min(20, this.shakeAmt + a); }
-  addHype(n, silent) { this.hype = clamp(this.hype + n, 0, this.passives.maxHype); }
   setBanner(a, b) { this.el.banner.textContent = a; this.el.waveSub.textContent = b; }
 
   _p(x, y, z, sp, vzMul, color, size, grav, glyph) {
@@ -784,7 +898,7 @@ class Game {
     ctx.save();
     if (this.shakeAmt > 0.2) ctx.translate(rand(-this.shakeAmt, this.shakeAmt), rand(-this.shakeAmt, this.shakeAmt));
 
-    ART.drawArena(ctx, w, this.time, this.hype);
+    ART.drawArena(ctx, w, this.time);
 
     // ground decals & hazards (under units)
     this._drawHazards(ctx);
@@ -812,9 +926,13 @@ class Game {
     this._drawParticles(ctx);
     this._drawFloaters(ctx);
 
-    // drag hint / spell aim
+    // drag hint / spell aim / flick line
     if (this.dragging) this._drawDropHint(ctx);
     if (this.armed && this.phase === 'battle') this._drawAim(ctx);
+    if (this.flick) this._drawFlick(ctx);
+
+    // the player's God Hand
+    if (this.hand.show) ART.drawHand(ctx, this.hand.x, this.hand.y, this.hand.mode, this.hand.anim, this.time);
 
     // boss banner
     if (this.bossBanner) this._drawBossBanner(ctx);
@@ -953,6 +1071,26 @@ class Game {
     ctx.restore();
   }
 
+  _drawFlick(ctx) {
+    const f = this.flick;
+    ctx.save();
+    // highlight the grabbed bug
+    if (f.target && f.target.alive) {
+      ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.ellipse(f.target.x, f.target.y, f.target.radius + 6, (f.target.radius + 6) * 0.6, 0, 0, TAU); ctx.stroke();
+    }
+    // aim/power line
+    const dx = f.x - f.sx, dy = f.y - f.sy, len = Math.hypot(dx, dy);
+    if (len > 8) {
+      ctx.globalAlpha = 0.85; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(f.sx, f.sy); ctx.lineTo(f.x, f.y); ctx.stroke(); ctx.setLineDash([]);
+      const ang = Math.atan2(dy, dx);
+      ctx.fillStyle = '#ffe08a'; ctx.translate(f.x, f.y); ctx.rotate(ang);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, -5); ctx.lineTo(-9, 5); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   _drawBossBanner(ctx) {
     const b = this.bossBanner; const a = clamp(b.t / 3.4, 0, 1);
     ctx.save(); ctx.globalAlpha = Math.min(1, a * 2);
@@ -970,9 +1108,6 @@ class Game {
     this.el.waveVal.textContent = this.wave;
     this.el.rosterVal.textContent = guys;
     this.el.scoreVal.textContent = this.score;
-    const frac = clamp(this.hype / this.passives.maxHype, 0, 1) * 100;
-    this.el.hypeFill.style.width = frac + '%';
-    this.el.hypeTxt.textContent = Math.floor(this.hype) + '/' + this.passives.maxHype;
     if (this.phase === 'battle') this._refreshSpellButtons();
   }
 

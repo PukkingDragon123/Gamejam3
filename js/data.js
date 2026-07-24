@@ -5,34 +5,41 @@
 
 const DATA = (() => {
 
-  // palette helper for the GUY sprite chars: O H P S E T B L
-  const gp = (o, h, p, s, e, t, b, l) => ({ O: o, H: h, P: p, S: s, E: e, T: t, B: b, L: l, _: o });
-  // palette for BUG sprite chars: O B W E M
-  const bp = (o, b, w, e, m) => ({ O: o, B: b, W: w, E: e, M: m, _: o });
+  // palette for the human sprite chars (o h H p k s e a A t T b).
+  // Pass base colours; light/shadow variants are derived automatically.
+  const gp = (o, skin, helm, plume, armor, tunic, belt, eye) => ({
+    o, h: helm, H: shade(helm, 0.42), p: plume,
+    k: skin, s: shade(skin, -0.3), e: eye,
+    a: armor, A: shade(armor, 0.38), t: tunic, T: shade(tunic, -0.32), b: belt,
+    _: o,
+  });
+  // palette for BUG sprite chars: o B W E M
+  const bp = (o, b, w, e, m) => ({ o, B: b, W: w, E: e, M: m, _: o });
 
   /* ---------------- LIL GUYS (playable fighters) ----------------
      atk types: melee | ranged | heal | buff
      weapon (drawn in code): sword spear bow fists shield staff drum
+     gp(outline, skin, helmet, plume, armor, tunic, belt, eye)
   */
   const GUYS = {
     gladiator: {
       id: 'gladiator', name: 'Gladiator', icon: '🗡️', weapon: 'sword', body: 'GUY',
       hp: 62, dmg: 11, range: 30, cd: 0.72, speed: 62, knock: 40, atk: 'melee',
-      pal: gp('#2a1a10', '#c98a2f', '#c8433a', '#e9b98a', '#20140c', '#efe3c8', '#7a4a22', '#e9b98a'),
+      pal: gp('#241a12', '#d99a6c', '#c9962f', '#c0392b', '#c39a44', '#efe3c8', '#7a4a22', '#1a1008'),
       blurb: 'Reliable sword-swinger. Good at everything, master of nothing.',
       shouts: ['FOR ROME!', 'HYAA!', 'TASTE STEEL!', 'poke!', 'en garde!'],
     },
     brawler: {
       id: 'brawler', name: 'Lil Boxer', icon: '🥊', weapon: 'fists', body: 'GUY',
       hp: 74, dmg: 7, range: 24, cd: 0.34, speed: 78, knock: 55, atk: 'melee',
-      pal: gp('#2a1a10', '#8a4a2a', '#e0c04a', '#e9b98a', '#20140c', '#c94a3a', '#5a3a1a', '#e9b98a'),
+      pal: gp('#241a12', '#e2a878', '#8a4a2a', '#e0c04a', '#b2402f', '#c94a3a', '#5a3a1a', '#1a1008'),
       blurb: 'Fast fists, big punches, tiny brain. Knocks bugs flying.',
       shouts: ['ONE-TWO!', 'BONK!', 'jab jab!', 'ha! HA!', 'come here!'],
     },
     spearman: {
       id: 'spearman', name: 'Spearman', icon: '🔱', weapon: 'spear', body: 'GUY',
       hp: 52, dmg: 10, range: 52, cd: 0.82, speed: 58, knock: 30, atk: 'melee',
-      pal: gp('#2a1a10', '#9a9aa8', '#3a7ab0', '#e9b98a', '#20140c', '#d8d2c0', '#5a4a2a', '#e9b98a'),
+      pal: gp('#241a12', '#caa07a', '#9aa0b0', '#3a7ab0', '#8a9099', '#d8d2c0', '#4a5a6a', '#1a1008'),
       blurb: 'Pokes from a safe-ish distance. Personal space enthusiast.',
       shouts: ['POKE!', 'stay back!', 'jab!', 'this end sharp!', 'reach!'],
     },
@@ -40,7 +47,7 @@ const DATA = (() => {
       id: 'archer', name: 'Archer', icon: '🏹', weapon: 'bow', body: 'GUY',
       hp: 40, dmg: 9, range: 210, cd: 1.0, speed: 60, knock: 10, atk: 'ranged',
       proj: { speed: 300, color: '#caa15a', kind: 'arrow' },
-      pal: gp('#2a1a10', '#4b7a3a', '#7bd66a', '#e9b98a', '#20140c', '#5a8a44', '#3a5a2a', '#e9b98a'),
+      pal: gp('#241a12', '#c99a6a', '#3f6a33', '#7bd66a', '#4d7a3a', '#6b9a54', '#3a5a2a', '#1a1008'),
       blurb: 'Plinks bugs from across the arena. Please protect the archer.',
       shouts: ['thwip!', 'nailed it!', 'FIRE!', 'skoosh!', 'headshot?'],
     },
@@ -48,22 +55,22 @@ const DATA = (() => {
       id: 'tank', name: 'Shieldbro', icon: '🛡️', weapon: 'shield', body: 'TANK',
       hp: 150, dmg: 5, range: 26, cd: 1.05, speed: 44, knock: 45, atk: 'melee',
       taunt: 1.9, dr: 0.4, // draws aggro; reduces incoming damage 40%
-      pal: gp('#2a1a10', '#8a8a94', '#b23a30', '#e9b98a', '#20140c', '#9aa0aa', '#4a4a52', '#e9b98a'),
+      pal: gp('#241a12', '#d9a173', '#8a8a94', '#b23a30', '#9aa0aa', '#7a808a', '#42424c', '#1a1008'),
       blurb: 'A wall with legs. Bugs love hitting it. Barely notices.',
       shouts: ['THIS WAY!', 'hit ME!', 'nnngh!', 'wall!', 'come at me!'],
     },
     medic: {
       id: 'medic', name: 'Medicus', icon: '➕', weapon: 'staff', body: 'GUY',
       hp: 46, dmg: 0, range: 170, cd: 1.15, speed: 58, heal: 9, atk: 'heal',
-      pal: gp('#2a1a10', '#d5d0c4', '#4bbf6a', '#e9b98a', '#20140c', '#f2ede0', '#8a8478', '#e9b98a'),
+      pal: gp('#241a12', '#e8bd95', '#e8e2d2', '#4bbf6a', '#f2ede0', '#f2ede0', '#8a8478', '#1a1008'),
       blurb: 'Waves a leafy stick and your guys stop dying. Very handy.',
       shouts: ['patched!', 'stay alive!', 'boop, healed', 'drink this!', 'nurse!'],
     },
     drummer: {
-      id: 'drummer', name: 'Hype Drummer', icon: '🥁', weapon: 'drum', body: 'GUY',
-      hp: 58, dmg: 3, range: 130, cd: 1.4, speed: 56, buffHaste: 0.4, hypeGen: 1.6, atk: 'buff',
-      pal: gp('#2a1a10', '#b0762f', '#e0c04a', '#e9b98a', '#20140c', '#8a3a8a', '#5a2a5a', '#e9b98a'),
-      blurb: 'Bangs a drum, nearby guys attack faster & the crowd goes nuts.',
+      id: 'drummer', name: 'War Drummer', icon: '🥁', weapon: 'drum', body: 'GUY',
+      hp: 58, dmg: 3, range: 130, cd: 1.4, speed: 56, buffHaste: 0.4, atk: 'buff',
+      pal: gp('#241a12', '#c98a5a', '#b0762f', '#e0c04a', '#7a337a', '#8a3a8a', '#4a2149', '#1a1008'),
+      blurb: 'Bangs a war-drum — nearby guys attack noticeably faster.',
       shouts: ['BOOM BAP!', 'faster!', 'ratatat!', 'feel it!', 'LOUDER!'],
     },
   };
@@ -142,8 +149,8 @@ const DATA = (() => {
       desc: 'Drops an ENORMOUS boulder from the sky. Huge smash damage + crater.',
     },
     snacks: {
-      id: 'snacks', name: 'Snack Toss', icon: '🍗', cost: 22, cd: 5, target: 'point',
-      desc: 'Fling snacks: heals your guys, distracts nearby bugs, crowd LOVES it (+hype).',
+      id: 'snacks', name: 'Snack Toss', icon: '🍗', cd: 5, target: 'point',
+      desc: 'Fling snacks: heals your guys and distracts nearby bugs (they stop to eat).',
     },
     cheese: {
       id: 'cheese', name: 'Cheese Lure', icon: '🧀', cost: 16, cd: 6, target: 'point',
@@ -162,8 +169,8 @@ const DATA = (() => {
       desc: 'Slick your whole squad: +60% attack speed & move speed for 6 seconds.',
     },
     rally: {
-      id: 'rally', name: 'Crowd Roar', icon: '📣', cost: 18, cd: 8, target: 'self',
-      desc: 'Whip up the crowd: instantly heal all guys a chunk & refund some hype.',
+      id: 'rally', name: 'Battle Roar', icon: '📣', cd: 8, target: 'self',
+      desc: 'A mighty roar: instantly heal your whole squad for a big chunk of HP.',
     },
   };
 
@@ -174,16 +181,16 @@ const DATA = (() => {
     goose: {
       id: 'goose', name: 'Angry Goose', icon: '🦢', kind: 'companion',
       hp: 60, dmg: 9, range: 26, cd: 0.5, speed: 95, knock: 40, atk: 'melee',
-      body: 'GUY', weapon: 'beak', scale: 1,
-      pal: gp('#2a1a10', '#f2f2f2', '#e0a81f', '#f2f2f2', '#20140c', '#f7f7f7', '#e0a81f', '#e0a81f'),
+      body: 'GOOSE', scale: 1.15,
+      pal: { o: '#2a2018', w: '#f6f5f0', W: '#d2d0c6', b: '#e6a81c', e: '#160e06', f: '#d8901a', _: '#2a2018' },
       shouts: ['HONK!', 'HONK', 'hsss!', 'HONK HONK', 'HOOONK'],
       desc: 'An unhinged goose roams the arena honking and pecking bugs. Fears nothing.',
     },
     dog: {
       id: 'dog', name: 'War Dog', icon: '🐕', kind: 'companion',
       hp: 70, dmg: 8, range: 24, cd: 0.45, speed: 105, knock: 30, atk: 'melee',
-      body: 'GUY', weapon: 'teeth', scale: 1,
-      pal: gp('#20140c', '#8a5a2f', '#5a3a1a', '#c98a4a', '#20140c', '#a06a34', '#3a2510', '#8a5a2f'),
+      body: 'DOG', scale: 1.15,
+      pal: { o: '#20140c', d: '#9a6a3a', D: '#6e4a26', l: '#c8a074', e: '#160e06', n: '#20140c', _: '#20140c' },
       shouts: ['woof!', 'GRR', 'bark!', 'borf!', 'ARF ARF'],
       desc: 'A very good (very bitey) boy. Sprints across the sand mauling bugs.',
     },
@@ -208,12 +215,12 @@ const DATA = (() => {
       desc: 'Scatter spikes that slow & chip every bug crossing them. Ouch, tiny feet.',
     },
     trumpet: {
-      id: 'trumpet', name: 'Golden Trumpet', icon: '🎺', kind: 'passive', passive: 'hypeRegen',
-      desc: 'A herald toots constantly: +50% Crowd Hype generation, forever.',
+      id: 'trumpet', name: 'Golden Trumpet', icon: '🎺', kind: 'passive', passive: 'cdReduce',
+      desc: 'A herald sounds the charge: all your god-powers recharge 20% faster.',
     },
     laurel: {
-      id: 'laurel', name: 'Laurel Crown', icon: '🌿', kind: 'passive', passive: 'maxHype',
-      desc: 'Crowd favourite! +30 max Crowd Hype and start each wave with more.',
+      id: 'laurel', name: 'Laurel Crown', icon: '🌿', kind: 'passive', passive: 'hpBoost',
+      desc: 'Champions of the games: +25% max HP to every Lil Guy you command.',
     },
   };
 
